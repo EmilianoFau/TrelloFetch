@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openEditModal(taskDiv) {
         currentTaskDiv = taskDiv;
+        currentTaskId = taskDiv.getAttribute('data-id');
         editTaskTitle.value = taskDiv.getAttribute('data-title');
         editTaskDescription.value = taskDiv.getAttribute('data-description');
         editTaskAssigned.value = taskDiv.getAttribute('data-assigned');
@@ -162,7 +163,9 @@ document.addEventListener('DOMContentLoaded', () => {
         closeEditModal();
     })
 
-    siEliminar.addEventListener('click', () => {
+    siEliminar.addEventListener('click', async () => {
+        const taskId = currentTaskDiv.getAttribute('data-id');
+        deleteData(taskId);
         currentTaskDiv.remove();
         closeConfirmModal();
     })
@@ -199,38 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('tasks', JSON.stringify(tasks));
     }
 
-    function loadTasks() {
-        const tasks = JSON.parse(localStorage.getItem('tasks')) || [];
-        tasks.forEach(task => {
-            const taskDiv = document.createElement('div');
-            taskDiv.className = 'box';
-            taskDiv.setAttribute('data-title', task.title);
-            taskDiv.setAttribute('data-description', task.description);
-            taskDiv.setAttribute('data-assigned', task.assigned);
-            taskDiv.setAttribute('data-priority', task.priority);
-            taskDiv.setAttribute('data-status', task.status);
-            taskDiv.setAttribute('data-deadline', task.deadline);
-            taskDiv.setAttribute('draggable', 'true');
-            taskDiv.innerHTML = `<strong>${task.title}</strong><p>${task.description}</p>`;
-
-            const column = document.getElementById(task.status);
-            if (column) {
-                column.querySelector('.task-list-content').appendChild(taskDiv);
-
-                taskDiv.addEventListener('dragstart', () => {
-                    taskDiv.classList.add('is-dragging');
-                });
-
-                taskDiv.addEventListener('dragend', () => {
-                    taskDiv.classList.remove('is-dragging');
-                    saveTasks();
-                });
-
-                taskDiv.addEventListener('click', () => openEditModal(taskDiv));
-            }
-        });
-    }
-
+    //GET
     async function getData() {
         try {
             const response = await fetch("http://localhost:3000/api/tasks");
@@ -255,6 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadServerData(task) {
         const taskDiv = document.createElement('div');
         taskDiv.className = 'box';
+        taskDiv.setAttribute('data-id', task.id);
         taskDiv.setAttribute('data-title', task.title);
         taskDiv.setAttribute('data-description', task.description);
         taskDiv.setAttribute('data-assigned', task.assignedTo);
@@ -283,4 +256,125 @@ document.addEventListener('DOMContentLoaded', () => {
             taskDiv.addEventListener('click', () => openEditModal(taskDiv));
         }
     }
+
+    //POST
+    async function postData(url, taskData) {
+        try {            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(taskData)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Error ' + response.statusText);
+            }
+    
+            const result = await response.json();
+            console.log('Tarea agregada:', result);
+        } catch (error) {
+            console.error('Error al agregar la tarea:', error);
+        }
+    }
+
+    taskForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+    
+        const taskData = {
+            title: taskTitle.value,
+            description: taskDescription.value,
+            assignedTo: taskAssigned.value,
+            priority: taskPriority.value,
+            status: taskStatus.value,
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: taskDeadline.value
+        };
+    
+        postData('http://localhost:3000/api/tasks', taskData);
+    
+        saveTasks();
+        closeModal();
+    });
+
+    //DELETE
+    async function deleteData(taskId) {
+        const deleteUrl = `http://localhost:3000/api/tasks/${taskId}`;
+        try {
+            const response = await fetch(deleteUrl, {
+                method: 'DELETE',
+            });
+    
+            if (!response.ok) {
+                throw new Error('Error ' + response.statusText);
+            }
+    
+            console.log('Tarea eliminada exitosamente');
+
+            const taskDiv = document.querySelector(`.box[data-id='${taskId}']`);
+            if (taskDiv) {
+                taskDiv.remove();
+            }
+        } catch (error) {
+            console.error('Error al eliminar la tarea:', error);
+        }
+    }
+
+    //PUT
+    async function updateData(taskId, updatedData) {
+        const updateUrl = `http://localhost:3000/api/tasks/${taskId}`;
+        try {
+            const response = await fetch(updateUrl, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Error ' + response.statusText);
+            }
+
+            const result = await response.json();
+            console.log('Tarea actualizada:', result);
+        } catch (error) {
+            console.error('Error al actualizar la tarea:', error);
+        }
+    }
+
+    editTaskForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+    
+        const updatedData = {
+            title: editTaskTitle.value,
+            description: editTaskDescription.value,
+            assignedTo: editTaskAssigned.value,
+            priority: editTaskPriority.value,
+            status: editTaskStatus.value,
+            endDate: editTaskDeadline.value
+        };
+    
+        try {
+            await updateData(currentTaskId, updatedData);
+            currentTaskDiv.setAttribute('data-title', editTaskTitle.value);
+            currentTaskDiv.setAttribute('data-description', editTaskDescription.value);
+            currentTaskDiv.setAttribute('data-assigned', editTaskAssigned.value);
+            currentTaskDiv.setAttribute('data-priority', editTaskPriority.value);
+            currentTaskDiv.setAttribute('data-status', editTaskStatus.value);
+            currentTaskDiv.setAttribute('data-deadline', editTaskDeadline.value);
+            currentTaskDiv.innerHTML = `<strong>${editTaskTitle.value}</strong><p>${editTaskDescription.value}</p>`;
+    
+            const column = document.getElementById(editTaskStatus.value);
+            if (column) {
+                column.querySelector('.task-list-content').appendChild(currentTaskDiv);
+            }
+    
+            closeEditModal();
+        } catch (error) {
+            console.error('Error al actualizar la tarea:', error);
+        }
+    });
+
 });
